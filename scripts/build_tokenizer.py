@@ -1,12 +1,5 @@
 #!/usr/bin/env python3
 """
-Build a SentencePiece tokenizer from Tadabur dataset in streaming mode.
-Streams the dataset on-the-fly without downloading everything at once.
-"""
-
-
-#!/usr/bin/env python3
-"""
 Build a SentencePiece tokenizer from Tadabur dataset.
 
 ISSUE & SOLUTION:
@@ -52,6 +45,7 @@ def download_and_extract_tadabur(
     max_samples: Optional[int] = None,
     num_files: Optional[int] = None,
     cache_dir: Optional[str] = None,
+    local_data_dir: Optional[str] = None,
 ) -> int:
     """
     Download Tadabur parquet files and extract text using local PyArrow processing.
@@ -66,6 +60,7 @@ def download_and_extract_tadabur(
         max_samples: Maximum number of samples (overrides percent if set)
         num_files: Maximum number of parquet files to download/process
         cache_dir: Cache directory for downloaded files (default: ~/.cache/huggingface/datasets)
+        local_data_dir: Optional local directory containing parquet files with the same naming scheme
 
     Returns:
         Number of samples processed
@@ -101,14 +96,22 @@ def download_and_extract_tadabur(
             parquet_file = f"{split}-{file_idx:05d}.parquet"
 
             try:
-                # Download file (uses cache, won't re-download)
-                logger.debug(f"Downloading {parquet_file}...")
-                local_path = hf_hub_download(
-                    repo_id="FaisaI/tadabur",
-                    filename=f"data/{parquet_file}",
-                    repo_type="dataset",
-                    cache_dir=cache_dir,
-                )
+                local_path = None
+                if local_data_dir:
+                    candidate_path = Path(local_data_dir) / parquet_file
+                    if candidate_path.exists():
+                        local_path = str(candidate_path)
+                        logger.info(f"Using local file: {candidate_path}")
+
+                if local_path is None:
+                    # Download file (uses cache, won't re-download when cached)
+                    logger.debug(f"Downloading {parquet_file}...")
+                    local_path = hf_hub_download(
+                        repo_id="FaisaI/tadabur",
+                        filename=f"data/{parquet_file}",
+                        repo_type="dataset",
+                        cache_dir=cache_dir,
+                    )
 
                 # Read only text columns with PyArrow
                 pf = pq.ParquetFile(local_path)
@@ -311,7 +314,7 @@ def main():
     parser.add_argument(
         "--percent",
         type=float,
-        default=1.0,
+        default=100.0,
         help="Percentage of dataset to use (1-100, default: 100)",
     )
     parser.add_argument(
@@ -329,8 +332,14 @@ def main():
     parser.add_argument(
         "--cache-dir",
         type=str,
+        default=".cache/huggingface",
+        help="Cache directory for downloaded parquet files (default: .cache/huggingface in the current repo)",
+    )
+    parser.add_argument(
+        "--local-data-dir",
+        type=str,
         default=None,
-        help="Cache directory for downloaded parquet files (default: ~/.cache/huggingface/datasets)",
+        help="Optional local directory with Tadabur parquet files (uses local files before downloading)",
     )
     parser.add_argument(
         "--no-train",
@@ -368,6 +377,7 @@ def main():
             max_samples=args.max_samples,
             num_files=args.num_files,
             cache_dir=args.cache_dir,
+            local_data_dir=args.local_data_dir,
         )
 
         if text_count == 0:
