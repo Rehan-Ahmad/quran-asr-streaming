@@ -1,16 +1,97 @@
-model:
-  name: nemotron-speech-streaming-en-0.6b
-  pretrained: null
+# Quran ASR Training Configuration
+# Adapt these values for your dataset and hardware
 
-data:
-  manifest: data/subset/manifest.csv
+name: "quran-asr-streaming"
+target: nemo.collections.asr.models.EncDecCTCModel  # or your model class
+
+model:
   sample_rate: 16000
+  compute_eval_loss: true
+  log_prediction: true
+  spec_augment:
+    _target_: nemo.collections.asr.modules.SpectrogramAugmentation
+    freq_masks: 2
+    time_masks: 2
+    freq_width: 27
+    time_width: 100
+
+  encoder:
+    _target_: nemo.collections.asr.modules.ConvASREncoder
+    feat_in: 64  # mel-spectrogram features
+    filters:
+      - 128
+      - 64
+      - 64
+    kernel_sizes:
+      - [11, 13]
+      - [13, 13]
+      - [13, 13]
+    strides:
+      - [2, 2]
+      - [1, 2]
+      - [1, 2]
+    dropout: 0.0
+    rnn_type: lstm
+    rnn_hidden_size: 256
+    rnn_layers: 2
+
+  decoder:
+    _target_: nemo.collections.asr.modules.RnnlmDecoder
+    vocab_size: 8000  # Must match tokenizer vocab_size
+    num_layers: 2
+    hidden_size: 256
+    dropout: 0.1
+
+train_ds:
+  manifest_filepath: data/subset/manifest.csv
+  sample_rate: 16000
+  batch_size: 8
+  shuffle: true
+  num_workers: 4
+  pin_memory: true
+  use_start_end_token: false
+
+validation_ds:
+  manifest_filepath: data/subset/manifest.csv  # Set to validation split if available
+  sample_rate: 16000
+  batch_size: 8
+  shuffle: false
+  num_workers: 0
+
+test_ds:
+  manifest_filepath: data/subset/manifest.csv
+  sample_rate: 16000
+  batch_size: 1
+  shuffle: false
+  num_workers: 0
 
 tokenizer:
-  path: tokenizers/
-  vocab_size: 8000
+  dir: tokenizers/  # Directory containing tokenizer artifacts
+  type: bpe  # or 'unigram'
 
-training:
-  epochs: 5
-  batch_size: 8
+optim:
+  name: adam
   lr: 1e-4
+  betas: [0.9, 0.999]
+  weight_decay: 1e-5
+  sched:
+    name: CosineAnnealing
+    max_steps: 10000
+    warmup_steps: 500
+
+trainer:
+  devices: 1  # Number of GPUs
+  max_epochs: 5
+  num_sanity_val_steps: 0
+  enable_checkpointing: true
+  logger: tensorboard  # or wandb
+  log_every_n_steps: 10
+  val_check_interval: 100
+
+# Paths for outputs
+exp_manager:
+  exp_dir: ./logs
+  name: quran-asr
+  checkpoint_dir: ./checkpoints
+  resume_if_exists: false
+  resume_ignore_no_checkpoint: true

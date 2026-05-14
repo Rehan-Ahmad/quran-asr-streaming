@@ -1,49 +1,98 @@
 #!/usr/bin/env python3
 """
-Download a small subset of the Tadabur dataset (audio + text) and generate a manifest CSV.
-Uses `datasets` to stream metadata and selectively download audio files.
+Download a small subset of the Tadabur dataset and generate a manifest CSV.
+Uses HuggingFace datasets library to stream and fetch audio + text pairs.
 """
 import argparse
 import os
 import csv
 from datasets import load_dataset
+from pathlib import Path
 
 
-def fetch(out_dir: str, percent: float = 1.0, split="train"):
+def fetch_subset(out_dir: str, percent: float = 1.0, split: str = "train"):
+    """
+    Fetch a subset of the Tadabur dataset.
+    
+    Args:
+        out_dir: Output directory for manifest and audio files.
+        percent: Percentage of dataset to fetch (1-100).
+        split: Dataset split to fetch ("train", "validation", "test").
+    """
     os.makedirs(out_dir, exist_ok=True)
-    ds = load_dataset("FaisaI/tadabur", split=split)
+    
+    print(f"Loading Tadabur dataset split '{split}'...")
+    ds = load_dataset("FaisaI/tadabur", split=split, trust_remote_code=True)
+    
     total = len(ds)
-    take = max(1, int(total * (percent / 100.0))) if percent < 100 else total
-    print(f"Dataset size: {total}. Taking {take} ({percent}%).")
-
+    if percent < 100:
+        take = max(1, int(total * (percent / 100.0)))
+    else:
+        take = total
+    
+    print(f"Dataset size: {total}. Taking {take} samples ({percent}%).")
+    
     manifest_path = os.path.join(out_dir, "manifest.csv")
-    with open(manifest_path, "w", newline='', encoding='utf-8') as fh:
+    print(f"Writing manifest to: {manifest_path}")
+    
+    with open(manifest_path, "w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=["audio_filepath", "duration", "text"])
         writer.writeheader()
+        
         for i, item in enumerate(ds):
             if i >= take:
                 break
-            audio = item.get("audio") or item.get("wav") or item.get("speech")
-            if audio is None:
-                continue
-            # audio could be dict with 'path' or 'array' depending on dataset
-            path = audio.get("path") if isinstance(audio, dict) else None
-            if path is None:
-                # attempt to download the file locally via dataset's features
-                path = ds._download_and_extract(audio["path"]) if isinstance(audio, dict) and "path" in audio else None
+            
+            # Extract audio and text from the dataset item
+            # Tadabur structure: { "audio": {...}, "text": "..." }
+            audio_data = item.get("audio")
             text = item.get("text", "")
-            writer.writerow({"audio_filepath": path or "", "duration": audio.get("duration", "" ) if isinstance(audio, dict) else "", "text": text})
-
-    print("Wrote manifest:", manifest_path)
+            
+            if not audio_data:
+                print(f"Skipping sample {i}: no audio")
+                continue
+            
+            # audio_data is typically { "path": "...", "array": [...], "sampling_rate": ... }
+            audio_path = audio_data.get("path", "")
+            duration = audio_data.get("duration", "")
+            
+            if not audio_path:
+                print(f"Skipping sample {i}: no audio path")
+                continue
+            
+            writer.writerow({
+                "audio_filepath": audio_path,
+                "duration": duration,
+                "text": text
+            })
+            
+            if (i + 1) % 100 == 0:
+                print(f"Processed {i + 1} samples...")
+    
+    print(f"\nDone! Manifest saved to: {manifest_path}")
+    print(f"Total samples in manifest: {i + 1}")
 
 
 def main():
-    p = argparse.ArgumentParser()
-    p.add_argument("--out-dir", required=True)
-    p.add_argument("--percent", type=float, default=1.0, help="Percent of dataset to fetch (1-100)")
-    p.add_argument("--split", default="train")
-    args = p.parse_args()
-    fetch(args.out_dir, args.percent, args.split)
+    parser = argparse.ArgumentParser(
+        description="Download a subset of the Tadabur dataset."
+    )
+    parser.add_argument(
+        "--out-dir", required=True,
+        help="Output directory for manifest.csv and audio files."
+    )
+    parser.add_argument(
+        "--percent", type=float, default=1.0,
+        help="Percentage of dataset to fetch (1-100). Default: 1.0"
+    )
+    parser.add_argument(
+        "--split", default="train",
+        help="Dataset split to fetch (train/validation/test). Default: train"
+    )
+    
+    args = parser.parse_args()
+    fetch_subset(args.out_dir, args.percent, args.split)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

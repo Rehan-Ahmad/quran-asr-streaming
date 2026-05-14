@@ -1,1 +1,1 @@
-"""Tokenizer helpers."""
+"""Tokenizer utilities for Quran ASR."""

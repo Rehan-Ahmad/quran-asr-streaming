@@ -1,21 +1,78 @@
-venv/
-.env
-*.pyc
+# Python
 __pycache__/
-.ipynb_checkpoints/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Data
 data/
-models/
-logs/
+downloads/
+datasets/
+
+# Models and checkpoints
 checkpoints/
+models/
 *.ckpt
 *.pt
 *.pth
-*.tar.gz
+
+# Logs and outputs
+logs/
+outputs/
 wandb/
+runs/
+
+# Cache
 .cache/
 .pytest_cache/
-.DS_Store
+.ipynb_checkpoints/
 hf_cache/
-downloads/
+
+# Coverage
 coverage/
+htmlcov/
+.coverage
+
+# Lock files (optional, for reproducibility keep uv.lock)
+# pip-lock files don't apply here since we use uv
+
+# Tokenizer outputs
+tokenizers/
+
+# Miscellaneous
+*.tar.gz
+*.zip
 *.log
