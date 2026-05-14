@@ -106,8 +106,12 @@ from typing import List, Optional
 
 import tokenizers
 
-from nemo.collections.common.tokenizers.sentencepiece_tokenizer import create_spt_model
-from nemo.utils.data_utils import DataStoreObject
+# PATCH: Commented out NeMo imports that trigger heavy Lightning stack dependency
+# These imports caused ModuleNotFoundError: No module named 'nv_one_logger'
+# Original: from nemo.collections.common.tokenizers.sentencepiece_tokenizer import create_spt_model
+# Original: from nemo.utils.data_utils import DataStoreObject
+
+import sentencepiece as spm
 
 parser = argparse.ArgumentParser(description='Create tokenizer')
 group = parser.add_mutually_exclusive_group(required=True)
@@ -200,7 +204,9 @@ def __build_document_from_manifests(
     num_lines = 0
     with open(document_path, 'w') as out_writer:
         for manifest in manifests:
-            with open(DataStoreObject(manifest).get(), 'r') as in_reader:
+            # PATCH: Replaced DataStoreObject(manifest).get() with direct file open
+            # DataStoreObject required NeMo imports that triggered Lightning stack
+            with open(manifest, 'r') as in_reader:
                 for line in in_reader:
                     item = json.loads(line)
                     text = item['text']
@@ -214,6 +220,88 @@ def __build_document_from_manifests(
 
         logging.info("Finished extracting all manifests ! Number of sentences : {}".format(num_lines))
     return document_path
+
+
+def __create_spt_model(
+    data_file: str,
+    vocab_size: int,
+    sample_size: int,
+    do_lower_case: bool,
+    output_dir: str,
+    tokenizer_type: str,
+    character_coverage: float,
+    train_extremely_large_corpus: bool,
+    max_sentencepiece_length: int,
+    split_by_unicode_script: bool,
+    bos: bool,
+    eos: bool,
+    pad: bool,
+    control_symbols: Optional[List[str]],
+    user_defined_symbols: Optional[List[str]],
+    byte_fallback: bool,
+    split_digits: bool,
+    remove_extra_whitespaces: bool,
+):
+    """
+    PATCH: Direct SentencePiece tokenizer training replacing NeMo's create_spt_model.
+    This avoids importing nemo.collections.common which triggers the Lightning stack.
+    
+    Creates a SentencePiece tokenizer model file. This is a direct replacement for
+    nemo.collections.common.tokenizers.sentencepiece_tokenizer.create_spt_model
+    that avoids the heavy NeMo dependency chain.
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    model_prefix = os.path.join(output_dir, 'tokenizer')
+    
+    # Build SentencePiece training command
+    cmd = f"--input={data_file} "
+    cmd += f"--model_prefix={model_prefix} "
+    cmd += f"--vocab_size={vocab_size} "
+    cmd += f"--model_type={tokenizer_type} "
+    cmd += f"--character_coverage={character_coverage} "
+    cmd += f"--unk_id=0 --bos_id=1 --eos_id=2 --pad_id=3 "
+    
+    if do_lower_case:
+        cmd += "--normalization_rule_name=nmt_nfkc "
+    
+    if bos:
+        cmd += "--bos_piece=<s> "
+    if eos:
+        cmd += "--eos_piece=</s> "
+    if pad:
+        cmd += "--pad_piece=<pad> "
+    
+    if control_symbols:
+        cmd += f"--control_symbols={','.join(control_symbols)} "
+    if user_defined_symbols:
+        cmd += f"--user_defined_symbols={','.join(user_defined_symbols)} "
+    
+    if byte_fallback:
+        cmd += "--byte_fallback=true "
+    if split_digits:
+        cmd += "--split_digits=true "
+    if remove_extra_whitespaces:
+        cmd += "--remove_redundant_substrings=true "
+    
+    if sample_size > 0:
+        cmd += f"--input_sentence_size={sample_size} "
+    
+    if max_sentencepiece_length > 0:
+        cmd += f"--max_sentencepiece_length={max_sentencepiece_length} "
+    
+    if train_extremely_large_corpus:
+        cmd += "--train_extremely_large_corpus=true "
+    
+    if not split_by_unicode_script:
+        cmd += "--split_by_unicode_script=false "
+    
+    logging.info(f"Training SentencePiece with command: {cmd}")
+    spm.SentencePieceTrainer.train(cmd)
+    
+    model_file = f"{model_prefix}.model"
+    vocab_file = f"{model_prefix}.vocab"
+    
+    return model_file, vocab_file
 
 
 def __process_data(
@@ -294,8 +382,8 @@ def __process_data(
             logging.warning("Model file already exists, overriding old model file !")
             os.remove(os.path.join(tokenizer_dir, 'tokenizer.model'))
 
-        # Build tokenizer
-        tokenizer_path, vocab_path = create_spt_model(
+        # Build tokenizer using patched __create_spt_model (replaces NeMo's create_spt_model)
+        tokenizer_path, vocab_path = __create_spt_model(
             data_file=text_path,
             vocab_size=vocab_size,
             sample_size=spe_sample_size,
