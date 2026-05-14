@@ -32,7 +32,7 @@ This creates `data/subset/manifest.csv` with 1% of the data.
 
 ### 3. Build Tokenizer
 
-Create a subword tokenizer (using NeMo's built-in script):
+Create a subword tokenizer (using the exact NeMo tokenizer script from the repo):
 
 ```bash
 python scripts/tokenizer_wrapper.py \
@@ -70,7 +70,8 @@ quran-asr-streaming/
 │
 ├── scripts/
 │   ├── fetch_subset.py        # Download a subset of Tadabur dataset
-│   └── tokenizer_wrapper.py   # Wrapper for NeMo tokenizer script
+│   ├── tokenizer_wrapper.py   # Wrapper for NeMo tokenizer
+│   └── process_asr_text_tokenizer.py  # Exact NeMo tokenizer script (from repo)
 │
 ├── src/
 │   ├── __init__.py
@@ -96,6 +97,11 @@ quran-asr-streaming/
 - **Recommendation**: Start with `--percent 1` to `--percent 10` for testing on limited systems.
 
 ---
+
+## Notes
+
+- **Tokenizer Script**: The exact NVIDIA NeMo tokenizer script (`process_asr_text_tokenizer.py`) is included in `scripts/`. No need to clone NeMo separately for tokenization.
+- **NeMo Toolkit**: The full NeMo toolkit is installed via `uv` in the `.venv/`, so you can use other NeMo utilities and models as needed.
 
 ## References
 
