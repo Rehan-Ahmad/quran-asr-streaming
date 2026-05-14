@@ -1,97 +1,201 @@
 # Quran ASR Training Configuration
-# Adapt these values for your dataset and hardware
+# Based on NVIDIA Nemotron-Speech-Streaming Cache-Aware FastConformer-RNNT
+# Reference: https://huggingface.co/nvidia/nemotron-speech-streaming-en-0.6b
 
 name: "quran-asr-streaming"
-target: nemo.collections.asr.models.EncDecCTCModel  # or your model class
+target: nemo.collections.asr.models.EncDecRNNTBPEModel
 
+# Model Architecture: Cache-Aware FastConformer Encoder + RNNT Decoder
 model:
   sample_rate: 16000
-  compute_eval_loss: true
   log_prediction: true
+  
+  # ================================
+  # Feature Extractor
+  # ================================
+  preprocessor:
+    _target_: nemo.collections.asr.modules.AudioToMelSpectrogramPreprocessor
+    sample_rate: 16000
+    normalize: "per_feature"
+    window_size: 0.02
+    window_stride: 0.01
+    window: "hann"
+    features: 80
+    n_fft: 512
+    frame_splicing:
+      left_pad: 0
+      right_pad: 0
+    dither: 0.0
+    pad_to: 16
+
   spec_augment:
     _target_: nemo.collections.asr.modules.SpectrogramAugmentation
     freq_masks: 2
     time_masks: 2
     freq_width: 27
     time_width: 100
+    prob: 0.5
 
+  # ================================
+  # Cache-Aware FastConformer Encoder (from Nemotron)
+  # ================================
   encoder:
-    _target_: nemo.collections.asr.modules.ConvASREncoder
-    feat_in: 64  # mel-spectrogram features
-    filters:
-      - 128
-      - 64
-      - 64
-    kernel_sizes:
-      - [11, 13]
-      - [13, 13]
-      - [13, 13]
-    strides:
-      - [2, 2]
-      - [1, 2]
-      - [1, 2]
+    _target_: nemo.collections.asr.modules.FastConformerEncoder
+    feat_in: 80
+    feat_out: -1
+    pos_emb_max_len: 5000
+    
+    # Conformer settings
+    n_layers: 24  # Nemotron uses 24 encoder layers
+    d_model: 384
+    
+    # Self-attention cache-aware settings
+    self_attention_model: "rel_pos_local_attn"
+    head_dim: 64
+    heads: 6
+    ffn_dim: 1536
+    conv_context_size: 9
+    conv_kernel_size: [5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15]
+    
+    # Subsampling
+    subsampling: "striding"
+    subsampling_factor: 4
+    subsampling_conv_channels: 128
+    subsampling_conv_kernel_sizes: [3, 3]
+    subsampling_conv_paddings: [1, 1]
+    
+    # Regularization
     dropout: 0.0
-    rnn_type: lstm
-    rnn_hidden_size: 256
-    rnn_layers: 2
+    dropout_emb: 0.0
+    dropout_att: 0.0
+    
+    # Streaming cache settings (Nemotron cache-aware design)
+    att_context_size: [70, 13]  # left context=70 frames, right context=13 frames
+    att_context_style: "regular"
 
+  # ================================
+  # RNNT Decoder (Transducer Decoder)
+  # ================================
   decoder:
-    _target_: nemo.collections.asr.modules.RnnlmDecoder
+    _target_: nemo.collections.asr.modules.RNNTDecoder
     vocab_size: 8000  # Must match tokenizer vocab_size
-    num_layers: 2
-    hidden_size: 256
-    dropout: 0.1
+    sample_rate: 16000
+    n_hidden: 1024
+    pred_hidden: 64
+    pred_rnn_layers: 2
+    joint_hidden: 640
+    dropout: 0.2
+    
+    # Prediction RNN
+    pred_rnn_type: lstm
+    pred_dropout: 0.2
+    
+    # Joint network
+    joint_net_output_size: 640
 
+  # ================================
+  # Loss
+  # ================================
+  loss:
+    loss_type: "titu"  # TITU loss for RNNT
+    reduction: "mean_batch"
+    clipping_threshold: 5.0
+
+# ================================
+# Data Configuration
+# ================================
 train_ds:
   manifest_filepath: data/subset/manifest.csv
   sample_rate: 16000
-  batch_size: 8
+  batch_size: 4  # Reduced for Quranic data + streaming
   shuffle: true
   num_workers: 4
   pin_memory: true
-  use_start_end_token: false
+  is_tarred: false
+  shuffle_n: 2048
+  num_samples: -1  # Use all samples
 
 validation_ds:
-  manifest_filepath: data/subset/manifest.csv  # Set to validation split if available
+  manifest_filepath: data/subset/manifest.csv  # Update to validation split
   sample_rate: 16000
-  batch_size: 8
+  batch_size: 4
   shuffle: false
   num_workers: 0
 
 test_ds:
-  manifest_filepath: data/subset/manifest.csv
+  manifest_filepath: data/subset/manifest.csv  # Update to test split
   sample_rate: 16000
   batch_size: 1
   shuffle: false
   num_workers: 0
 
+# ================================
+# Tokenizer Configuration
+# ================================
 tokenizer:
-  dir: tokenizers/  # Directory containing tokenizer artifacts
-  type: bpe  # or 'unigram'
+  dir: tokenizers/quran/  # Directory containing quran_tokenizer.model
+  type: bpe
 
+# ================================
+# Optimizer Configuration
+# ================================
 optim:
-  name: adam
+  name: adamw
   lr: 1e-4
   betas: [0.9, 0.999]
   weight_decay: 1e-5
   sched:
     name: CosineAnnealing
-    max_steps: 10000
-    warmup_steps: 500
+    max_steps: 100000
+    warmup_steps: 1000
+    warmup_ratio: 0.05
 
+# ================================
+# Trainer Configuration
+# ================================
 trainer:
-  devices: 1  # Number of GPUs
-  max_epochs: 5
+  devices: 1  # Number of GPUs (change to number available)
+  accelerator: gpu
+  max_epochs: 20
+  max_steps: -1
   num_sanity_val_steps: 0
   enable_checkpointing: true
-  logger: tensorboard  # or wandb
+  logger: tensorboard  # or wandb for Weights & Biases
   log_every_n_steps: 10
-  val_check_interval: 100
+  val_check_interval: 0.1  # Validate 10% through epoch
+  gradient_clip_val: 1.0
+  precision: bf16  # Use bfloat16 for Ampere+ GPUs
+  accumulate_grad_batches: 1
+  benchmark: true
+  enable_progress_bar: true
 
-# Paths for outputs
+# ================================
+# Experiment Manager
+# ================================
 exp_manager:
   exp_dir: ./logs
-  name: quran-asr
+  name: quran-asr-nemotron
+  version: null
   checkpoint_dir: ./checkpoints
   resume_if_exists: false
   resume_ignore_no_checkpoint: true
+  
+  # Checkpointing
+  create_checkpoint_callback: true
+  checkpoint_callback_params:
+    monitor: val_wer
+    mode: min
+    save_top_k: 3
+    always_save_nemo: true
+    save_nemo_on_train_end: true
+    filename: "nemotron-quran-{epoch:03d}-{val_wer:.3f}"
+    model_parallel_size: 1
+
+# ================================
+# Hydra Configuration
+# ================================
+hydra:
+  run:
+    dir: .
+  job:
+    chdir: false
