@@ -1,0 +1,46 @@
+# Nemotron Speech Streaming reference template.
+# Source model: nvidia/nemotron-speech-streaming-en-0.6b
+
+model:
+  name: nemotron_speech_streaming_en_0_6b_template
+  architecture: FastConformer-CacheAware-RNNT
+  encoder_layers: 24
+  parameters: 600000000
+  tokenizer_path: ""
+  vocab_size: 8000
+  language: en
+
+audio:
+  sample_rate: 16000
+  channel_count: 1
+
+streaming:
+  att_context_size: [70, 13]
+  supported_right_contexts: [0, 1, 6, 13]
+  chunk_sizes_ms: [80, 160, 560, 1120]
+
+training:
+  framework: NeMo
+  runtime_engine: "NeMo 25.11 / Riva 2.25.0+"
+  batch_size: 8
+  learning_rate: 1.0e-4
+  epochs: 10
+  max_steps: 10000
+  log_interval: 100
+
+data:
+  train_manifest: ""
+  val_manifest: ""
+  train_dataset_hours: 530000
+  source_datasets:
+    - Riva ASR training set
+    - Granary English portion
+
+distributed:
+  use_ddp: false
+  nproc_per_node: 1
+
+# For actual fine-tuning, point `tokenizer_path` to the SentencePiece model
+# produced by this repo and replace the data manifests with your Quranic Arabic
+# dataset. Keep the streaming context settings unless you want a different
+# latency/accuracy point.
