@@ -172,9 +172,7 @@ quran-asr-streaming/
 │   └── quran/                      # Example output directory
 ├── configs/
 │   └── train_config.yaml           # Training configuration
-├── src/
-│   ├── data/                       # Data loading modules
-│   └── tokenizer/                  # Tokenizer utilities
+├── src/ (removed)                  # Previously held reusable package modules; now empty and removed
 └── README.md                       # This file
 ```
 
@@ -281,3 +279,5 @@ Run layout:
 - `runs/<name>/data/`: downloaded shards and `download_manifest.json`
 - `runs/<name>/tokenizer/`: tokenizer output, `run_manifest.json`, and `reproduce_tokenizer.sh`
 - `runs/<name>/training/`: place training logs, checkpoints, and export artifacts here
+
+Note: existing reproducer artifacts (for previous runs) were moved to [scripts/reproducers](scripts/reproducers) for a cleaner repository layout. The default write location for new reproducer artifacts remains the run output directory (for example `runs/<name>/tokenizer/` or `tokenizers/<run-name>/`) so the exact invocation is still preserved with each run unless you explicitly change the target directory.
