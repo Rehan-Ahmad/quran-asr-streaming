@@ -35,6 +35,27 @@ python scripts/build_tokenizer.py \
   --max-samples 500
 ```
 
+**Reproducible presets for the current subset and the future RunPod full run:**
+```bash
+# Current local subset workflow used in this repo
+scripts/run_tokenizer_repro.sh \
+  --profile local-subset \
+  --output-dir tokenizers/quran_uthmani_10 \
+  --local-data-dir data/tadabur/data \
+  --text-column text_ar_uthmani \
+  --vocab-size 8000
+
+# RunPod/full-dataset target when you are ready to scale up
+scripts/run_tokenizer_repro.sh \
+  --profile runpod-full \
+  --output-dir tokenizers/quran_runpod_full \
+  --text-column text_ar_uthmani \
+  --cache-dir .cache/huggingface \
+  --vocab-size 8000
+```
+
+Each run writes `run_manifest.json` and `reproduce_tokenizer.sh` inside the output directory so the exact invocation is preserved.
+
 **Use 10% of training data:**
 ```bash
 python scripts/build_tokenizer.py \
@@ -44,6 +65,8 @@ python scripts/build_tokenizer.py \
   --percent 10 \
   --num-threads 8
 ```
+
+If you want the same behavior with a saved manifest, use `scripts/run_tokenizer_repro.sh` and choose the `local-subset` or `runpod-full` profile.
 
 **Use validation split:**
 ```bash

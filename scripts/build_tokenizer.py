@@ -46,6 +46,7 @@ def download_and_extract_tadabur(
     num_files: Optional[int] = None,
     cache_dir: Optional[str] = None,
     local_data_dir: Optional[str] = None,
+    text_column: Optional[str] = None,
 ) -> int:
     """
     Download Tadabur parquet files and extract text using local PyArrow processing.
@@ -116,20 +117,25 @@ def download_and_extract_tadabur(
                 # Read only text columns with PyArrow
                 pf = pq.ParquetFile(local_path)
 
-                # Select available text columns
+                # Select the requested text column (prefer user choice)
                 available_cols = pf.schema.names
-                text_cols = [c for c in ['text_ar_simple', 'text_ar_uthmani'] if c in available_cols]
+                preferred = text_column or 'text_ar_simple'
+                if preferred in available_cols:
+                    cols_to_use = [preferred]
+                else:
+                    # Fallback to any available text columns
+                    cols_to_use = [c for c in ['text_ar_simple', 'text_ar_uthmani'] if c in available_cols]
 
-                if not text_cols:
+                if not cols_to_use:
                     logger.warning(f"No text columns in {parquet_file}, skipping")
                     continue
 
-                # Read ONLY text columns - avoids nested 'audio' column
-                table = pf.read(columns=text_cols)
+                # Read ONLY the chosen text column - avoids nested 'audio' column
+                table = pf.read(columns=cols_to_use)
                 df = table.to_pandas()
 
-                # Extract text from first available column
-                text_col = text_cols[0]
+                # Extract text from the chosen column
+                text_col = cols_to_use[0]
 
                 for text in df[text_col]:
                     if max_samples and sample_count >= max_samples:
@@ -342,6 +348,13 @@ def main():
         help="Optional local directory with Tadabur parquet files (uses local files before downloading)",
     )
     parser.add_argument(
+        "--text-column",
+        type=str,
+        choices=["text_ar_simple", "text_ar_uthmani"],
+        default="text_ar_simple",
+        help="Which text column to extract (default: text_ar_simple). Use text_ar_uthmani to keep tashkeel",
+    )
+    parser.add_argument(
         "--no-train",
         action="store_true",
         help="Extract text only, do not train tokenizer",
@@ -378,6 +391,7 @@ def main():
             num_files=args.num_files,
             cache_dir=args.cache_dir,
             local_data_dir=args.local_data_dir,
+            text_column=args.text_column,
         )
 
         if text_count == 0:
