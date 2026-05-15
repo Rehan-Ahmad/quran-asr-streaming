@@ -98,42 +98,7 @@ Edit `configs/train_config.yaml` with your dataset paths, batch size, learning r
 
 Use NeMo training script or your custom script in `src/`. See references for details.
 
----
-
-## Project Structure
-
-```
-quran-asr-streaming/
-├── .venv/                     # Virtual environment (created by uv)
-├── pyproject.toml             # Project config & dependencies (uv)
-├── uv.lock                    # Locked dependencies (reproducible)
-├── README.md                  # This file
-├── .gitignore                 # Git ignore patterns
-│
-├── configs/
-│   └── train_config.yaml      # Training configuration template
-│
-├── scripts/
-│   ├── fetch_subset.py        # Download a subset of Tadabur dataset
-│   ├── tokenizer_wrapper.py   # Wrapper for NeMo tokenizer
-│   └── process_asr_text_tokenizer.py  # Exact NeMo tokenizer script (from repo)
-│
-├── src/
-│   ├── __init__.py
-│   ├── data/                  # Data utilities
-│   │   └── __init__.py
-│   └── tokenizer/             # Tokenizer utilities
-│       └── __init__.py
-│
-├── data/                      # Local data directory (ignored by git)
-│   └── subset/                # Downloaded subset manifest & audio
-│
-├── tokenizers/                # Built tokenizer outputs (ignored by git)
-├── logs/                      # Training logs (ignored by git)
-└── checkpoints/               # Model checkpoints (ignored by git)
-```
-
----
+See Project Structure below.
 
 ## Tokenizer Parameters
 
@@ -291,3 +256,28 @@ export HF_TOKEN="hf_..."
 - **NeMo**: Apache License 2.0
 - **SentencePiece**: Apache License 2.0
 - **Tadabur Dataset**: Check repository for license
+
+
+## Reproducible Workflow
+
+This repository includes a deterministic workflow to: create a `uv` virtualenv, download a reproducible subset of the Tadabur dataset (1-100%), prepare a SentencePiece tokenizer, and provide a template to run Nemotron streaming training.
+
+Files:
+- `scripts/setup_env.sh`: Create `.venv` with `uv` and install project dependencies.
+- `scripts/download_dataset.py`: Deterministic downloader that selects the first N shards from the requested split and writes `download_manifest.json`.
+- `scripts/run_full_workflow.sh`: Orchestrates env creation, dataset download (`--percent`), tokenizer preparation and prints a Nemotron training template (dry-run support).
+- `configs/nemotron_streaming.yaml`: Nemotron-card-aligned streaming template — edit before running training.
+- `scripts/train_nemotron.py`: Lightweight trainer wrapper that prints the loaded config and a short reminder of how to launch Nemotron training.
+
+Quick example (1% subset, 8k vocab, dry-run):
+
+```bash
+bash scripts/run_full_workflow.sh --output-dir runs/my_run --percent 1 --vocab-size 8000 --dry-run
+```
+
+To actually run training, edit `configs/nemotron_streaming.yaml` and then use your Nemotron/NeMo launcher. The workflow preserves reproducibility by writing `download_manifest.json` and the tokenizer reproducer inside the `--output-dir`.
+
+Run layout:
+- `runs/<name>/data/`: downloaded shards and `download_manifest.json`
+- `runs/<name>/tokenizer/`: tokenizer output, `run_manifest.json`, and `reproduce_tokenizer.sh`
+- `runs/<name>/training/`: place training logs, checkpoints, and export artifacts here
