@@ -6,7 +6,7 @@ model:
   architecture: FastConformer-CacheAware-RNNT
   encoder_layers: 24
   parameters: 600000000
-  tokenizer_path: ""
+  tokenizer_path: "tokenizers/quran/quran_tokenizer.model"
   vocab_size: 8000
   language: en
 
@@ -24,7 +24,7 @@ training:
   runtime_engine: "NeMo 25.11 / Riva 2.25.0+"
   batch_size: 8
   learning_rate: 1.0e-4
-  epochs: 10
+  epochs: 3
   max_steps: 10000
   log_interval: 100
 

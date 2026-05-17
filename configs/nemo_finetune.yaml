@@ -1,0 +1,161 @@
+trainer:
+  devices: 1
+  accelerator: gpu
+  max_epochs: 3
+  max_steps: -1
+  num_sanity_val_steps: 0
+  enable_checkpointing: false
+  logger: false
+  log_every_n_steps: 10
+  val_check_interval: 0.1
+  gradient_clip_val: 1.0
+  precision: bf16
+  accumulate_grad_batches: 1
+  benchmark: true
+  enable_progress_bar: true
+exp_manager:
+  exp_dir: ./logs
+  name: quran-asr-nemotron
+  version: null
+  resume_if_exists: false
+  resume_ignore_no_checkpoint: true
+  create_checkpoint_callback: true
+  checkpoint_callback_params:
+    monitor: val_wer
+    mode: min
+    save_top_k: 3
+    always_save_nemo: true
+    save_nemo_on_train_end: true
+    filename: nemotron-quran-{epoch:03d}-{val_wer:.3f}
+    model_parallel_size: 1
+model:
+  sample_rate: 16000
+  log_prediction: true
+  preprocessor:
+    _target_: nemo.collections.asr.modules.AudioToMelSpectrogramPreprocessor
+    sample_rate: 16000
+    normalize: per_feature
+    window_size: 0.02
+    window_stride: 0.01
+    window: hann
+    features: 80
+    n_fft: 512
+    frame_splicing:
+      left_pad: 0
+      right_pad: 0
+    dither: 0.0
+    pad_to: 16
+  spec_augment:
+    _target_: nemo.collections.asr.modules.SpectrogramAugmentation
+    freq_masks: 2
+    time_masks: 2
+    freq_width: 27
+    time_width: 100
+    prob: 0.5
+  encoder:
+    _target_: nemo.collections.asr.modules.FastConformerEncoder
+    feat_in: 80
+    feat_out: -1
+    pos_emb_max_len: 5000
+    n_layers: 24
+    d_model: 384
+    self_attention_model: rel_pos_local_attn
+    head_dim: 64
+    heads: 6
+    ffn_dim: 1536
+    conv_context_size: 9
+    conv_kernel_size:
+    - 5
+    - 5
+    - 5
+    - 5
+    - 5
+    - 5
+    - 5
+    - 5
+    - 5
+    - 5
+    - 5
+    - 5
+    - 15
+    - 15
+    - 15
+    - 15
+    - 15
+    - 15
+    - 15
+    - 15
+    - 15
+    - 15
+    - 15
+    - 15
+    subsampling: striding
+    subsampling_factor: 4
+    subsampling_conv_channels: 128
+    subsampling_conv_kernel_sizes:
+    - 3
+    - 3
+    subsampling_conv_paddings:
+    - 1
+    - 1
+    dropout: 0.0
+    dropout_emb: 0.0
+    dropout_att: 0.0
+    att_context_size:
+    - 70
+    - 13
+    att_context_style: regular
+  decoder:
+    _target_: nemo.collections.asr.modules.RNNTDecoder
+    vocab_size: 8000
+    sample_rate: 16000
+    n_hidden: 1024
+    pred_hidden: 64
+    pred_rnn_layers: 2
+    joint_hidden: 640
+    dropout: 0.2
+    pred_rnn_type: lstm
+    pred_dropout: 0.2
+    joint_net_output_size: 640
+  loss:
+    loss_type: titu
+    reduction: mean_batch
+    clipping_threshold: 5.0
+  train_ds:
+    manifest_filepath: data/subset/train_manifest.json
+    sample_rate: 16000
+    batch_size: 4
+    shuffle: true
+    num_workers: 4
+    pin_memory: true
+    is_tarred: false
+    shuffle_n: 2048
+    num_samples: -1
+  validation_ds:
+    manifest_filepath: data/subset/validation_manifest.json
+    sample_rate: 16000
+    batch_size: 4
+    shuffle: false
+    num_workers: 0
+  test_ds:
+    manifest_filepath: data/subset/test_manifest.json
+    sample_rate: 16000
+    batch_size: 1
+    shuffle: false
+    num_workers: 0
+  optim:
+    name: adamw
+    lr: 1e-4
+    betas:
+    - 0.9
+    - 0.999
+    weight_decay: 1e-5
+    sched:
+      name: CosineAnnealing
+      max_steps: 100000
+      warmup_steps: 1000
+      warmup_ratio: 0.05
+  tokenizer:
+    dir: tokenizers/quran/
+    type: bpe
+init_from_pretrained_model: nvidia/nemotron-speech-streaming-en-0.6b

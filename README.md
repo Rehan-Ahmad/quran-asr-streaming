@@ -98,6 +98,28 @@ Edit `configs/train_config.yaml` with your dataset paths, batch size, learning r
 
 Use NeMo training script or your custom script in `src/`. See references for details.
 
+For the streaming NeMo finetune workflow in this repo, use the launcher below instead of editing the tracked YAML in place:
+
+```bash
+bash scripts/train_streaming.sh --smoke-only
+bash scripts/train_streaming.sh
+```
+
+The launcher creates a temporary config copy for the smoke test, applies the smaller batch/epoch overrides there, and leaves the committed YAML templates untouched.
+
+### RunPod Reproducible Startup
+
+To recreate the exact environment from the lockfile and optionally launch the finetune job on RunPod:
+
+```bash
+bash scripts/runpod_start.sh
+
+# or bootstrap and start training in one step
+bash scripts/runpod_start.sh --train
+```
+
+The script runs `uv sync --frozen --no-install-project` from the repo root, verifies the critical NeMo imports, and then starts the local finetune launcher when `--train` is passed.
+
 See Project Structure below.
 
 ## Tokenizer Parameters
